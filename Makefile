@@ -15,17 +15,10 @@ LUCI_DEPENDS:=+!wget&&!curl:wget +adguardhome
 LUCI_PKGARCH:=all
 LUCI_DESCRIPTION:=LuCI support for adguardhome
 
-
-define Package/luci-app-adguardhome/description
-	LuCI support for adguardhome
-endef
-
-
 define Package/luci-app-adguardhome/conffiles
 /usr/share/AdGuardHome/links.txt
 /etc/config/AdGuardHome
 endef
-
 
 define Package/luci-app-adguardhome/postinst
 #!/bin/sh
