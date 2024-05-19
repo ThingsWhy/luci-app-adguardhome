@@ -29,11 +29,11 @@ dns:
     - https://120.53.53.53/dns-query
   upstream_dns_file: ""
   bootstrap_dns:
-    - 180.168.255.118
-    - 116.228.111.18
+    - 223.5.5.5
+    - 119.29.29.29
   fallback_dns:
-    - 180.168.255.118
-    - 116.228.111.18
+    - 223.5.5.5
+    - 119.29.29.29
   upstream_mode: fastest_addr
   fastest_timeout: 1s
   allowed_clients: []
