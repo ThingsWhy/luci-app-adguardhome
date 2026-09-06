@@ -1,6 +1,9 @@
-
 msgid ""
 msgstr ""
+"Project-Id-Version: luci-app-adguardhome\n"
+"Language: zh_Hans\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
 
 msgid "<a href=\"https://github.com/stevenjoezhang/luci-app-adguardhome\" target=\"_blank\">⭐ Star on GitHub</a>"
 msgstr "<a href=\"https://github.com/stevenjoezhang/luci-app-adguardhome\" target=\"_blank\">⭐ 在 GitHub 上关注</a>"
