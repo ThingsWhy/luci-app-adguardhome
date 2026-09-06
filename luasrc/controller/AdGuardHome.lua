@@ -23,9 +23,10 @@ function act_status()
 	local e={}
 	local binpath=uci:get("AdGuardHome","AdGuardHome","binpath") or "/usr/bin/AdGuardHome/AdGuardHome"
 	local configpath=uci:get("AdGuardHome","AdGuardHome","configpath") or "/etc/AdGuardHome.yaml"
+	local config_size=fs.stat(configpath,"size") or 0
 	e.core=fs.access(binpath) and true or false
-	e.initialized=fs.access(configpath) and true or false
-	e.running=e.core and luci.sys.call("pgrep "..binpath.." >/dev/null")==0 or false
+	e.initialized=config_size > 0
+	e.running=e.core and luci.sys.call("/etc/init.d/AdGuardHome running main >/dev/null 2>&1")==0 or false
 	e.redirect=(fs.readfile("/var/run/AdG_redir")=="1")
 	http.prepare_content("application/json")
 	http.write_json(e)
