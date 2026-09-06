@@ -404,6 +404,28 @@ download_candidate() {
     return 1
 }
 
+recover_interrupted_transaction() {
+    rollback_core="${binpath}.rollback"
+    [ -f "$rollback_core" ] || return 0
+
+    log "Recovering an interrupted core update from $rollback_core."
+    should_start=0
+    service_should_start && should_start=1
+
+    trap '' HUP INT TERM
+    "$SERVICE" stop nobackup >/dev/null 2>&1 || true
+    rm -f "$binpath"
+    if ! mv "$rollback_core" "$binpath"; then
+        trap on_signal HUP INT TERM
+        log "Error: failed to restore the rollback core."
+        return 1
+    fi
+    chmod 0755 "$binpath" >/dev/null 2>&1 || true
+    [ "$should_start" = "1" ] && "$SERVICE" start >/dev/null 2>&1 || true
+    trap on_signal HUP INT TERM
+    return 0
+}
+
 service_should_start() {
     if "$SERVICE" running main >/dev/null 2>&1; then
         return 0
@@ -448,6 +470,8 @@ install_candidate() {
     }
 
     log "Installing validated core transactionally..."
+    # Ignore termination signals only during the short commit/rollback window.
+    trap '' HUP INT TERM
     "$SERVICE" stop nobackup >/dev/null 2>&1 || true
 
     rm -f "$rollback_core"
@@ -456,6 +480,7 @@ install_candidate() {
             log "Error: failed to preserve the current core for rollback."
             rm -f "$new_core"
             [ "$should_start" = "1" ] && "$SERVICE" start >/dev/null 2>&1
+            trap on_signal HUP INT TERM
             return 1
         fi
     fi
@@ -464,6 +489,7 @@ install_candidate() {
         log "Error: failed to activate the staged core; restoring the previous core."
         [ "$had_old" = "1" ] && mv "$rollback_core" "$binpath"
         [ "$should_start" = "1" ] && "$SERVICE" start >/dev/null 2>&1
+        trap on_signal HUP INT TERM
         return 1
     fi
 
@@ -487,11 +513,13 @@ install_candidate() {
             else
                 log "No previous core is available for rollback; leaving the validated new binary installed with DNS takeover disabled."
             fi
+            trap on_signal HUP INT TERM
             return 1
         fi
     fi
 
     rm -f "$rollback_core"
+    trap on_signal HUP INT TERM
     return 0
 }
 
@@ -543,6 +571,7 @@ main() {
     }
 
     load_config || finish 1
+    recover_interrupted_transaction || finish 1
     if check_and_update "$mode"; then
         finish 0
     fi
