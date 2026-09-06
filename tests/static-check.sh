@@ -86,7 +86,10 @@ fi
 if grep -n 'pgrep' "$updater"; then
     fail "updater concurrency must use its lock, not process-name matching"
 fi
-if grep -n -E '\$\{[^}]*//' "$updater"; then
+# Bash pattern replacement has the form ${name//pattern/replacement}; limit
+# the check to // immediately after a variable name so POSIX defaults that
+# contain URLs such as ${VAR:-https://...} are not false positives.
+if grep -n -E '\$\{[A-Za-z_][A-Za-z0-9_]*//' "$updater"; then
     fail "bash-only parameter replacement detected in /bin/sh updater"
 fi
 if grep -n -E 'kill .*update_core|kill .*pgrep' luasrc/controller/AdGuardHome.lua; then
