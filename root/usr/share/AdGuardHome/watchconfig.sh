@@ -9,6 +9,10 @@ fail_count=0
 sleep 2
 
 while :; do
+	# stop_service creates this marker before touching DNS state.  Exiting here
+	# prevents the monitor from re-enabling redirection while procd is stopping.
+	[ -e /var/run/AdG_stopping ] && exit 0
+
 	# A missing or empty config is a legitimate first-run state.  Never
 	# redirect DNS until AdGuard Home has produced a real configuration.
 	if [ ! -s "$configpath" ]; then
