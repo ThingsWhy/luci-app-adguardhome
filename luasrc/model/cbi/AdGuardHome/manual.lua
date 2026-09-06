@@ -36,7 +36,8 @@ o.write = function(self, section, value)
 	fs.move("/tmp/AdGuardHometmpconfig.yaml",configpath)
 end
 o.remove = function(self, section, value)
-	fs.writefile(configpath, "")
+	fs.remove("/tmp/AdGuardHometmpconfig.yaml")
+	fs.remove(configpath)
 end
 --- js and reload button
 o = s:option(DummyValue, "")
