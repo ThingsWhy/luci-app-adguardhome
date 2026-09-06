@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-checks:
+    name: Static checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y busybox-static gettext jq lua5.1
+
+      - name: Run static checks
+        run: sh tests/static-check.sh
+
+  build:
+    name: ImmortalWrt ${{ matrix.release }} build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - release: "24.10.6"
+            sdk_file: immortalwrt-sdk-24.10.6-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
+            sdk_sha256: 709bea2ce466b7ad671ce00fdcb1eb69b2b3fa0f0921b12b620725d95cd8c0e5
+            package_ext: ipk
+          - release: "25.12.1"
+            sdk_file: immortalwrt-sdk-25.12.1-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+            sdk_sha256: 02ad8cfc775001ccae8e9282d19696de54e3ab3963f005737ad61f8698263edd
+            package_ext: apk
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential clang flex bison g++ gawk gcc-multilib gettext \
+            git libncurses-dev libssl-dev python3-setuptools rsync swig \
+            unzip zlib1g-dev file wget zstd
+
+      - name: Cache ImmortalWrt SDK archive
+        id: cache-sdk
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/${{ matrix.sdk_file }}
+          key: immortalwrt-sdk-${{ matrix.release }}-x86-64
+
+      - name: Download and verify SDK
+        env:
+          SDK_FILE: ${{ matrix.sdk_file }}
+          SDK_SHA256: ${{ matrix.sdk_sha256 }}
+          RELEASE: ${{ matrix.release }}
+        run: |
+          set -eux
+          archive="${RUNNER_TEMP}/${SDK_FILE}"
+          if [ ! -f "$archive" ]; then
+            wget -O "$archive" "https://downloads.immortalwrt.org/releases/${RELEASE}/targets/x86/64/${SDK_FILE}"
+          fi
+          echo "${SDK_SHA256}  ${archive}" | sha256sum -c -
+
+      - name: Extract SDK
+        env:
+          SDK_FILE: ${{ matrix.sdk_file }}
+        run: |
+          set -eux
+          mkdir -p "${RUNNER_TEMP}/sdk-${{ matrix.release }}"
+          tar --use-compress-program=unzstd -xf "${RUNNER_TEMP}/${SDK_FILE}" -C "${RUNNER_TEMP}/sdk-${{ matrix.release }}" --strip-components=1
+          echo "SDK_DIR=${RUNNER_TEMP}/sdk-${{ matrix.release }}" >> "$GITHUB_ENV"
+
+      - name: Prepare feeds and package
+        run: |
+          set -eux
+          cd "$SDK_DIR"
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          rm -rf package/luci-app-adguardhome
+          ln -s "$GITHUB_WORKSPACE" package/luci-app-adguardhome
+          make defconfig
+
+      - name: Build package
+        run: |
+          set -eux
+          cd "$SDK_DIR"
+          make package/luci-app-adguardhome/compile V=s -j2
+
+      - name: Verify package format
+        env:
+          PACKAGE_EXT: ${{ matrix.package_ext }}
+        run: |
+          set -eux
+          cd "$SDK_DIR"
+          find bin -type f -name "luci-app-adguardhome*.${PACKAGE_EXT}" -print -quit | grep -q .
+
+      - name: Collect artifacts
+        env:
+          PACKAGE_EXT: ${{ matrix.package_ext }}
+        run: |
+          set -eux
+          mkdir -p artifacts
+          find "$SDK_DIR/bin" -type f \( \
+            -name "luci-app-adguardhome*.${PACKAGE_EXT}" -o \
+            -name "luci-i18n-adguardhome*.${PACKAGE_EXT}" \
+          \) -exec cp -v {} artifacts/ \;
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: luci-app-adguardhome-immortalwrt-${{ matrix.release }}
+          path: artifacts/*
+          if-no-files-found: error
