@@ -22,9 +22,8 @@ Download `.ipk` and `.apk` from [Releases](https://github.com/stevenjoezhang/luc
   - Customize runtime log path
 - GFWList query to specific DNS server. Also check out [luci-app-autoipsetadder](https://github.com/rufengsuixing/luci-app-autoipsetadder)
 - View/delete/backup runtime log in positive/reverse order with 3-second updates + local browser timezone conversion
-- Manual configuration:
-  - YAML editor support
-  - Templates for fast configuration
+- Manual configuration with a YAML editor
+- Explicit first-run initialization through AdGuard Home's native setup wizard; this package does not inject a bundled business configuration
 - File preservation during system upgrades
 - Waits for network access at boot (3min timeout, mainly to prevent filter update failure)
 - Workdir backup on shutdown (Note: backup also triggers during IPK updates)
@@ -48,6 +47,9 @@ Note: the plugin will install dependencies with `opkg` automatically if not pres
 
 - Download release and install with `opkg`
 - Or when building OpenWrt, clone the code to package path and set as `y` or `m`
+- Download the AdGuard Home core from the LuCI plugin and enable the service
+- When no AdGuard Home configuration exists, open the **AdGuardHome Web** entry on the configured management port and complete AdGuard Home's native setup wizard
+- DNS redirection is not activated before the configuration file exists; after initialization, the selected redirect mode can take effect normally
 
 ## About Compression
 
