@@ -107,7 +107,7 @@ binpath="$BIN"
 configpath="$TMP/no-config.yaml"
 enabled=1
 latest_ver="v2.0.0"
-START_WAIT=1
+START_WAIT=3
 install_candidate "$CANDIDATE_TEST" >/dev/null || fail "transactional install failed"
 assert_eq "$(get_version "$BIN")" "v2.0.0"
 [ ! -e "${BIN}.rollback" ] || fail "rollback file left after successful update"
@@ -136,7 +136,7 @@ assert_eq "$(get_version "$BIN")" "v1.0.0"
 [ ! -e "${BIN}.rollback" ] || fail "rollback file remains after recovery"
 [ -f "$RUNNING" ] || fail "restored core was not restarted"
 
-echo "[updater 7/7] atomic updater lock and stale-lock recovery"
+echo "[updater 7/7] atomic updater lock and stale-lock handling"
 LOCK_DIR="$TMP/update.lock"
 LOCK_HELD=0
 mkdir -p "$LOCK_DIR"
@@ -145,8 +145,15 @@ if acquire_lock >/dev/null 2>&1; then
     fail "concurrent updater lock was accepted"
 fi
 printf '%s\n' "999999" > "$LOCK_DIR/pid"
-acquire_lock >/dev/null || fail "stale updater lock was not recovered"
+if acquire_lock >/dev/null 2>&1; then
+    fail "stale updater lock was automatically reclaimed"
+fi
+rm -f "$LOCK_DIR/pid"
+rmdir "$LOCK_DIR" || fail "stale updater lock was not manually removable"
+
+acquire_lock >/dev/null || fail "updater lock could not be acquired"
+[ "$(cat "$LOCK_DIR/pid")" = "$$" ] || fail "lock owner was not recorded"
 release_lock
-[ ! -e "$LOCK_DIR" ] || fail "updater lock was not released"
+[ ! -e "$LOCK_DIR" ] || fail "updater lock was not released by its owner"
 
 echo "Updater tests passed."

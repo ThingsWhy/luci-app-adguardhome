@@ -32,9 +32,8 @@ cleanup_update_root() {
 
 release_lock() {
     if [ "$LOCK_HELD" = "1" ]; then
-        if [ "$(cat "$LOCK_DIR/pid" 2>/dev/null)" = "$$" ]; then
-            rm -rf "$LOCK_DIR" >/dev/null 2>&1
-        fi
+        rm -f "$LOCK_DIR/pid" >/dev/null 2>&1
+        rmdir "$LOCK_DIR" >/dev/null 2>&1 || true
         LOCK_HELD=0
     fi
 }
@@ -54,26 +53,23 @@ on_signal() {
 
 acquire_lock() {
     if mkdir "$LOCK_DIR" 2>/dev/null; then
-        printf '%s\n' "$$" > "$LOCK_DIR/pid"
+        # mkdir is the ownership operation; the PID is only diagnostic.
         LOCK_HELD=1
+        if ! printf '%s\n' "$$" > "$LOCK_DIR/pid"; then
+            release_lock
+            log "Failed to publish the core update lock owner."
+            return 1
+        fi
         return 0
     fi
 
     lock_pid="$(cat "$LOCK_DIR/pid" 2>/dev/null)"
-    if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null; then
-        log "A core update task is already running (pid $lock_pid)."
-        return 1
+    if [ -n "$lock_pid" ]; then
+        log "A core update task is already running or the update lock is stale (pid $lock_pid)."
+    else
+        log "A core update task is already running or the update lock is being initialized."
     fi
-
-    log "Removing stale core update lock."
-    rm -rf "$LOCK_DIR" >/dev/null 2>&1
-    if mkdir "$LOCK_DIR" 2>/dev/null; then
-        printf '%s\n' "$$" > "$LOCK_DIR/pid"
-        LOCK_HELD=1
-        return 0
-    fi
-
-    log "Failed to acquire core update lock."
+    log "If no updater is running, verify that and remove $LOCK_DIR before retrying."
     return 1
 }
 
@@ -435,9 +431,13 @@ service_should_start() {
 
 wait_for_service() {
     count=0
+    stable=0
     while [ "$count" -lt "$START_WAIT" ]; do
         if "$SERVICE" running main >/dev/null 2>&1; then
-            return 0
+            stable=$((stable + 1))
+            [ "$stable" -ge 3 ] && return 0
+        else
+            stable=0
         fi
         sleep 1
         count=$((count + 1))
